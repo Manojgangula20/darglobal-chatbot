@@ -1,7 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
@@ -12,7 +11,11 @@ from . import config as C, rag, refresh as R
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 STATIC = Path(__file__).parent / "static"
 sched = BackgroundScheduler(timezone="UTC")
-
+from collections import defaultdict, deque
+import time
+CHAT_LIMIT = 12
+CHAT_WINDOW = 60
+chat_requests = defaultdict(deque)
 
 @asynccontextmanager
 async def lifespan(app):

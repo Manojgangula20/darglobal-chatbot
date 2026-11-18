@@ -96,12 +96,28 @@ def clean_lines(text: str) -> str:
 
 def extract(html: str):
     soup = BeautifulSoup(html, "lxml")
+
     title = soup.title.get_text(strip=True) if soup.title else ""
+
+    desc_tag = soup.find(
+        "meta",
+        attrs={"name": re.compile("^description$", re.I)}
+    )
+    description = desc_tag.get("content", "").strip() if desc_tag else ""
+
     links = [a["href"] for a in soup.find_all("a", href=True)]
+
     for t in soup(DROP):
         t.decompose()
+
     root = soup.find("main") or soup.find("article") or soup.body or soup
-    return title, clean_lines(root.get_text("\n")), links
+    body = clean_lines(root.get_text("\n"))
+
+    text = clean_lines(
+        f"{description}\n{body}" if description else body
+    )
+
+    return title, text, links
 
 
 def _get(url: str, rec: dict | None):

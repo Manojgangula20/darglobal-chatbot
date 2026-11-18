@@ -9,10 +9,15 @@ DATA_DIR = Path(os.getenv("DATA_DIR", BASE / "runtime"))   # live data + embeddi
 MODEL_CACHE = BASE / "models"
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-MODEL_PRIMARY = os.getenv("MODEL_PRIMARY", "meta-llama/llama-3.3-70b-instruct:free")
-MODEL_FALLBACKS = [m.strip() for m in os.getenv(
-    "MODEL_FALLBACKS",
-    "google/gemma-3-27b-it:free,mistralai/mistral-small-3.1-24b-instruct:free").split(",") if m.strip()]
+MODEL_PRIMARY = os.getenv(
+    "MODEL_PRIMARY",
+    "nvidia/nemotron-3-ultra-550b-a55b:free"
+)
+MODEL_FALLBACKS = [
+    m.strip()
+    for m in os.getenv("MODEL_FALLBACKS", "").split(",")
+    if m.strip()
+]
 
 REFRESH_INTERVAL_MIN = int(os.getenv("REFRESH_INTERVAL_MIN", "60"))
 REFRESH_TOKEN = os.getenv("REFRESH_TOKEN", "")
@@ -36,11 +41,19 @@ SITES = {
     },
     "wasalt": {
         "base": "https://wasalt.sa",
-        "seeds": ["https://wasalt.sa/en", "https://wasalt.sa/en/about", "https://wasalt.sa/en/corporate"],
+        "seeds": ["https://wasalt.sa/en", "https://wasalt.sa/en/corporate"],
         "max_pages": 60,
         "include": [r"^/en(/|$)"],
         # skip thousands of changing property listings
-        "exclude": [r"-for-", r"/propert", r"/ads?/", r"/listing", r"/unit", r"/map"] + _COMMON_EXCLUDE,
+        "exclude": [
+            r"-for-",
+            r"/propert",
+            r"/ads?/",
+            r"/listing",
+            r"/unit",
+            r"/map",
+            r"/dailyrental",
+        ] + _COMMON_EXCLUDE,
     },
 }
 

@@ -26,10 +26,10 @@ user question → top-k chunks → OpenRouter free model → answer + source lin
 - **Grounding**: strict prompt, answers only from retrieved context, otherwise says it doesn't have the information. Sources are shown under each answer.
 
 ## Freshness
+
 | What | How often |
 |---|---|
 | In-app data refresh | every `REFRESH_INTERVAL_MIN` (default 60) minutes |
-| Keep-alive ping to `/health` (Cloudflare Workers cron) | every 15 minutes |
 | Safety net | `/health` starts a background refresh if data is older than the interval |
 | Manual | `POST /refresh` with header `X-Refresh-Token` |
 
@@ -53,12 +53,56 @@ docker build -t darglobal-bot .
 docker run -p 7860:7860 -e OPENROUTER_API_KEY=sk-or-... -e REFRESH_TOKEN=secret darglobal-bot
 ```
 
-## Deploy (Hugging Face Spaces)
-1. Create a Space, SDK **Docker**, blank template.
-2. Space → Settings → Variables and secrets: add secrets `OPENROUTER_API_KEY` and `REFRESH_TOKEN`.
-3. Push this repo to the Space's git remote.
-4. Live URL: `https://<username>-<space-name>.hf.space`
-5. Keep-alive: `cd cloudflare-cron`, set `APP_URL` in `wrangler.toml`, run `npx wrangler deploy`.
+## Deploy (Render)
+
+The application is deployed as a Docker web service on Render.
+
+1. Create a new Web Service on [Render](https://render.com/).
+2. Connect this GitHub repository.
+3. Select **Docker** as the runtime.
+4. Set the deployment branch to `main`.
+5. Add the following environment variables under Environment:
+
+   - `OPENROUTER_API_KEY` — required, OpenRouter API key.
+   - `REFRESH_TOKEN` — token used to protect manual refresh requests.
+   - `MODEL_PRIMARY` — primary OpenRouter model (optional).
+   - `MODEL_FALLBACKS` — comma-separated fallback models (optional).
+   - `REFRESH_INTERVAL_MIN` — automatic refresh interval in minutes (default: 60).
+
+6. Deploy the service. Render builds the Docker image and starts the application.
+7. Open the generated Render URL.
+
+### Health check
+
+Render can monitor the application using:
+
+`/health`
+
+The application also exposes:
+
+- `/` — chatbot interface.
+- `/chat` — chatbot API.
+- `/status` — index and refresh status.
+- `/refresh` — manually trigger a refresh (requires `X-Refresh-Token`).
+
+### Resource constraints and design decisions
+
+The application targets a lightweight hosting environment (approximately 512 MB RAM and 0.1 CPU).
+
+- **Local embeddings:** `all-MiniLM-L6-v2` runs through FastEmbed and ONNX. No external embedding API is required.
+- **Committed snapshot:** `seed/pages.json` provides the initial website data so the application can initialize without requiring a successful live scrape during startup.
+- **Incremental processing:** Unchanged pages reuse cached embeddings.
+- **Atomic index replacement:** A new index is built before replacing the active index.
+- **Refresh safety:** If scraping fails or returns substantially less content than expected, the previous index remains available.
+- **LLM usage:** OpenRouter free models are subject to provider rate limits and availability. Fallback models can be configured through environment variables.
+
+### Known limitations
+
+- Render filesystem storage may be ephemeral, so runtime data and embedding caches can be lost after a restart.
+- The committed snapshot can become outdated until the next successful refresh.
+- Free OpenRouter models may return HTTP 429 or experience temporary outages.
+- The in-memory index and refresh state are designed for a single application instance.
+- Answers are limited to the scraped public website content, with source links provided for verification.
 
 ## Notes and limits
 - Free hosting disk is ephemeral; the committed `seed/pages.json` snapshot makes the bot work immediately after any restart, then it refreshes itself.

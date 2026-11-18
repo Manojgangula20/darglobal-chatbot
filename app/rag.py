@@ -49,20 +49,37 @@ def _call_llm(prompt: str) -> str | None:
 
 
 def answer(question: str, history: list, index) -> dict:
-    hits = index.search(question)
+    prev = next(
+        (m["content"] for m in reversed(history) if m.get("role") == "user"),
+        ""
+    )
+    query = (
+        f"{prev[:300]} {question}"
+        if prev and len(question.split()) < 8
+        else question
+    )
+
+    hits = index.search(query)
     text = _call_llm(_prompt(question, history, hits))
+
     if text is None:
-        return {"answer": "The AI model is busy or unavailable right now. Please try again in a moment.",
-                "sources": []}
+        return {
+            "answer": "The AI model is busy or unavailable right now. Please try again in a moment.",
+            "sources": []
+        }
+
+    if text.replace("’", "'").strip().lower().startswith(
+        "i don't have that information"
+    ):
+        return {"answer": text, "sources": []}
+
     seen, sources = set(), []
     for c, _ in hits:
         if c["url"] not in seen and len(sources) < 4:
             seen.add(c["url"])
-            sources.append({"title": c["title"] or c["url"], "url": c["url"]})
-        if text.strip().lower().startswith("i don't have that information"):
-            sources = []
-    prev = next((m["content"] for m in reversed(history) if m.get("role") == "user"), "")
-    query = f"{prev[:300]} {question}" if prev and len(question.split()) < 8 else question
-    hits = index.search(query)
-    
+            sources.append({
+                "title": c["title"] or c["url"],
+                "url": c["url"]
+            })
+
     return {"answer": text, "sources": sources}
