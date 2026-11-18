@@ -1,0 +1,8 @@
+runtime/
+models/
+.env
+__pycache__/
+*.pyc
+venv/
+test_blog.py
+*.log
