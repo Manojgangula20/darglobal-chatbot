@@ -22,6 +22,7 @@ def load_initial():
         INDEX = indexer.build(pages)
         STATE["last_changed"] = STATE["last_checked"] = max(r["fetched_at"] for r in pages.values())
         STATE["last_result"] = "loaded snapshot"
+        STATE["_checked_ts"] = time.time()   # snapshot counts as fresh, so /health won't start a scrape at boot
 
 
 def is_stale() -> bool:

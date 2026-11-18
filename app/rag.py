@@ -61,5 +61,8 @@ def answer(question: str, history: list, index) -> dict:
             sources.append({"title": c["title"] or c["url"], "url": c["url"]})
         if text.strip().lower().startswith("i don't have that information"):
             sources = []
+    prev = next((m["content"] for m in reversed(history) if m.get("role") == "user"), "")
+    query = f"{prev[:300]} {question}" if prev and len(question.split()) < 8 else question
+    hits = index.search(query)
     
     return {"answer": text, "sources": sources}

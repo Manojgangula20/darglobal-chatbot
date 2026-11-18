@@ -1,6 +1,5 @@
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -18,8 +17,7 @@ sched = BackgroundScheduler(timezone="UTC")
 @asynccontextmanager
 async def lifespan(app):
     R.load_initial()
-    sched.add_job(R.refresh, "interval", minutes=C.REFRESH_INTERVAL_MIN, max_instances=1, coalesce=True,
-                  next_run_time=datetime.now(timezone.utc) + timedelta(seconds=30))   # first live check shortly after boot
+    sched.add_job(R.refresh, "interval", minutes=C.REFRESH_INTERVAL_MIN, max_instances=1, coalesce=True)
     sched.start()
     yield
     sched.shutdown(wait=False)
