@@ -8,10 +8,12 @@ def pages_path() -> Path:
 
 
 def ensure_runtime():
+    """First boot: copy the committed snapshot and its embeddings, so nothing has to be embedded at startup."""
     C.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    seed = C.SEED_DIR / "pages.json"
-    if not pages_path().exists() and seed.exists():
-        shutil.copy(seed, pages_path())
+    for name in ("pages.json", "emb_cache.pkl"):
+        src, dst = C.SEED_DIR / name, C.DATA_DIR / name
+        if src.exists() and not dst.exists():
+            shutil.copy(src, dst)
 
 
 def load_pages(path: Path | None = None) -> dict:

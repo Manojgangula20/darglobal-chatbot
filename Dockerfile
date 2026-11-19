@@ -1,10 +1,11 @@
 FROM python:3.11-slim
 
-# Hugging Face Spaces / Render: run as a non-root user
+# Run as a non-root user (Render / Hugging Face style)
 RUN useradd -m -u 1000 user
-ENV HOME=/home/user PATH=/home/user/.local/bin:$PATH PYTHONUNBUFFERED=1 MALLOC_ARENA_MAX=2 OMP_NUM_THREADS=1
+# Memory controls for a ~512 MB instance: fewer malloc arenas, single-threaded ONNX/BLAS
+ENV HOME=/home/user PATH=/home/user/.local/bin:$PATH PYTHONUNBUFFERED=1 \
+    MALLOC_ARENA_MAX=2 OMP_NUM_THREADS=1 TOKENIZERS_PARALLELISM=false
 
-# WORKDIR alone would create this folder as root, so create it as user's first
 RUN mkdir -p /home/user/app && chown -R user:user /home/user/app
 WORKDIR /home/user/app
 
@@ -14,7 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=user . .
 
-# Bake the embedding model + index for the committed snapshot
+# Prepare the runtime index from the committed snapshot (cache hit: nothing needs embedding)
 RUN python -m app.cli build || echo "index pre-build skipped"
 
 EXPOSE 7860

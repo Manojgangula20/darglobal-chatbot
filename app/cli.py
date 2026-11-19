@@ -1,5 +1,5 @@
 """python -m app.cli dry-run | scrape | build | ask "question" """
-import argparse, json, sys
+import argparse, json, shutil, sys
 from . import config as C, indexer, rag, scraper, store
 
 
@@ -8,8 +8,8 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("dry-run", help="scrape a few pages per site, print what was found, save nothing")
     d.add_argument("--limit", type=int, default=8)
-    sub.add_parser("scrape", help="full scrape; writes seed/pages.json (commit it) and runtime/pages.json")
-    sub.add_parser("build", help="build the embedding index from the saved snapshot")
+    sub.add_parser("scrape", help="full scrape + embeddings; writes seed/pages.json and seed/emb_cache.pkl (commit both)")
+    sub.add_parser("build", help="build the index from the saved snapshot")
     a = sub.add_parser("ask", help="ask a question locally (needs OPENROUTER_API_KEY)")
     a.add_argument("question")
     args = ap.parse_args()
@@ -27,7 +27,10 @@ def main():
         store.save_pages(pages)
         print(json.dumps({k: {x: (len(v) if isinstance(v, list) else v) for x, v in r.items()}
                           for k, r in report.items()}, indent=2))
-        print(f"saved {len(pages)} pages")
+        print(f"saved {len(pages)} pages; embedding new chunks (this runs on your PC, not on the server)...")
+        idx = indexer.build(pages)
+        shutil.copy(C.DATA_DIR / "emb_cache.pkl", C.SEED_DIR / "emb_cache.pkl")
+        print(f"index ready: {len(idx.chunks)} chunks; saved seed/emb_cache.pkl")
     elif args.cmd == "build":
         store.ensure_runtime()
         idx = indexer.build(store.load_pages())

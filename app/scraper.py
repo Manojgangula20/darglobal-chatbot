@@ -1,4 +1,4 @@
-"""Polite scraper: robots.txt respected, conditional GETs, change detection by content hash."""
+"""Polite scraper: robots.txt respected, conditional GETs, size caps, change detection by content hash."""
 import hashlib, logging, re, time
 from datetime import datetime, timezone
 from urllib.parse import urljoin, urlparse, urldefrag
@@ -64,6 +64,7 @@ def path_ok(cfg: dict, path: str) -> bool:
 
 
 def sitemap_urls(root: str, max_maps: int = 5, max_urls: int = 3000) -> list[str]:
+    """Read sitemaps as capped text with a regex: no XML tree, so memory stays flat."""
     out, seen = [], set()
     todo = list(_rp(root).site_maps() or [root + "/sitemap.xml"])
     while todo and len(seen) < max_maps and len(out) < max_urls:
@@ -75,7 +76,7 @@ def sitemap_urls(root: str, max_maps: int = 5, max_urls: int = 3000) -> list[str
             with S.get(sm, timeout=20, stream=True) as r:
                 if r.status_code != 200:
                     continue
-                body = r.raw.read(5_000_000, decode_content=True)   # cap at 5 MB
+                body = r.raw.read(5_000_000, decode_content=True)     # cap at 5 MB
         except Exception:
             continue
         for u in re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", body.decode("utf-8", "ignore")):
@@ -98,31 +99,21 @@ def clean_lines(text: str) -> str:
 
 def extract(html: str):
     soup = BeautifulSoup(html, "lxml")
-
     title = soup.title.get_text(strip=True) if soup.title else ""
-
-    desc_tag = soup.find(
-        "meta",
-        attrs={"name": re.compile("^description$", re.I)}
-    )
+    desc_tag = soup.find("meta", attrs={"name": re.compile("^description$", re.I)})
     description = desc_tag.get("content", "").strip() if desc_tag else ""
-
     links = [a["href"] for a in soup.find_all("a", href=True)]
-
     for t in soup(DROP):
         t.decompose()
-
     root = soup.find("main") or soup.find("article") or soup.body or soup
     body = clean_lines(root.get_text("\n"))
-
-    text = clean_lines(
-        f"{description}\n{body}" if description else body
-    )
-
+    text = clean_lines(f"{description}\n{body}" if description else body)
+    soup.decompose()                       # release the parse tree right away
     return title, text, links
 
 
 def _get(url: str, rec: dict | None):
+    """Streamed GET with a size cap. Returns (response, body); body is None when the page is too large."""
     headers = {}
     if rec and rec.get("etag"):
         headers["If-None-Match"] = rec["etag"]
@@ -130,14 +121,27 @@ def _get(url: str, rec: dict | None):
         headers["If-Modified-Since"] = rec["last_modified"]
     for attempt in range(2):
         try:
-            r = S.get(url, headers=headers, timeout=25)
-            if r.status_code < 500:
-                return r
+            r = S.get(url, headers=headers, timeout=25, stream=True)
+            if r.status_code >= 500 and attempt == 0:
+                r.close()
+                time.sleep(2)
+                continue
+            body = b""
+            if r.status_code == 200:
+                parts, size = [], 0
+                for part in r.iter_content(65536):
+                    size += len(part)
+                    if size > C.MAX_PAGE_BYTES:
+                        r.close()
+                        return r, None
+                    parts.append(part)
+                body = b"".join(parts)
+            r.close()
+            return r, body
         except requests.RequestException:
             if attempt:
                 raise
-        time.sleep(2)
-    return r
+            time.sleep(2)
 
 
 # ---------- site scrape ----------
@@ -165,13 +169,14 @@ def scrape_site(key: str, existing: dict, limit: int | None = None):
     while i < len(queue) and len(pages) < maxp and i < max_requests:
         url = queue[i]
         i += 1
-        print(f"[{key}] request {i}/{len(queue)} | kept {len(pages)}/{maxp} | {url}", flush=True)
+        if i % 10 == 1:
+            print(f"[{key}] request {i}/{len(queue)} | kept {len(pages)}/{maxp} | {url}", flush=True)
         if not robots_ok(url):
             rep["skipped_robots"].append(url)
             continue
         rec = old.get(url)
         try:
-            r = _get(url, rec)
+            r, body = _get(url, rec)
         except requests.RequestException as e:
             rep["errors"].append(f"{url}: {e}")
             if rec:
@@ -186,15 +191,21 @@ def scrape_site(key: str, existing: dict, limit: int | None = None):
             for l in rec.get("links", []):
                 enq(l)
             continue
+        if body is None:
+            rep["errors"].append(f"{url}: skipped, over size limit")
+            if rec:
+                pages[url] = rec
+            continue
         if r.status_code != 200 or "html" not in r.headers.get("content-type", "") or not same_host(r.url, base):
             rep["errors"].append(f"{url}: HTTP {r.status_code}")
             if rec:
                 pages[url] = rec
             continue
 
-        title, text, links = extract(r.text)
+        title, text, links = extract(body.decode(r.encoding or "utf-8", "ignore"))
+        del body
         abs_links = [norm(urljoin(url, l)) for l in links if not l.startswith(("mailto:", "tel:", "javascript:"))]
-        abs_links = [l for l in abs_links if same_host(l, base) and path_ok(cfg, urlparse(l).path)][:200]
+        abs_links = [l for l in abs_links if same_host(l, base) and path_ok(cfg, urlparse(l).path)][:100]
         for l in abs_links:
             enq(l)
         if len(text) < 150:
@@ -207,7 +218,7 @@ def scrape_site(key: str, existing: dict, limit: int | None = None):
     return pages, rep
 
 
-# ---------- Wasalt blog (WordPress REST API) ----------
+# ---------- Wasalt blog (WordPress REST API), whole blog, page by page ----------
 def scrape_blog(limit: int | None = None):
     cfg = C.BLOG
     pages, rep = {}, {"fetched": 0, "errors": [], "skipped_robots": []}
@@ -217,13 +228,13 @@ def scrape_blog(limit: int | None = None):
     maxp, page = limit or cfg["max_posts"], 1
     while len(pages) < maxp:
         try:
-            r = S.get(cfg["api"], timeout=25, params={
-                "per_page": 20, "page": page, "orderby": "modified", "order": "desc",
+            r = S.get(cfg["api"], timeout=40, params={
+                "per_page": cfg.get("per_page", 50), "page": page, "orderby": "modified", "order": "desc",
                 "_fields": "id,link,modified_gmt,title,content"})
         except requests.RequestException as e:
             rep["errors"].append(str(e))
             break
-        if r.status_code != 200:
+        if r.status_code != 200:             # WordPress answers 400 once the page number runs past the end
             if page == 1:
                 rep["errors"].append(f"blog API HTTP {r.status_code}")
             break
@@ -242,6 +253,7 @@ def scrape_blog(limit: int | None = None):
             rep["fetched"] += 1
             if len(pages) >= maxp:
                 break
+        del data
         page += 1
         time.sleep(C.REQUEST_DELAY)
     return pages, rep

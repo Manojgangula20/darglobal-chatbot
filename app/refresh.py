@@ -1,6 +1,5 @@
-import logging, threading, time
+import gc, logging, threading, time
 from datetime import datetime, timezone
-import gc
 
 from . import config as C, indexer, scraper, store
 
@@ -15,6 +14,16 @@ def _iso():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _slim(report: dict) -> dict:
+    """Keep /status small: counts instead of long URL lists, plus a few sample errors."""
+    out = {}
+    for site, rep in report.items():
+        out[site] = {k: (len(v) if isinstance(v, list) else v) for k, v in rep.items()}
+        if rep.get("errors"):
+            out[site]["sample_errors"] = rep["errors"][:3]
+    return out
+
+
 def load_initial():
     global INDEX
     store.ensure_runtime()
@@ -23,7 +32,10 @@ def load_initial():
         INDEX = indexer.build(pages)
         STATE["last_changed"] = STATE["last_checked"] = max(r["fetched_at"] for r in pages.values())
         STATE["last_result"] = "loaded snapshot"
-        STATE["_checked_ts"] = datetime.fromisoformat(STATE["last_checked"]).timestamp()   # snapshot counts as fresh, so /health won't start a scrape at boot
+        # use the snapshot's real age: an old snapshot counts as stale and gets refreshed soon after boot
+        STATE["_checked_ts"] = datetime.fromisoformat(STATE["last_checked"]).timestamp()
+    del pages
+    gc.collect()
 
 
 def is_stale() -> bool:
@@ -44,13 +56,14 @@ def refresh(force: bool = False) -> dict:
         if new and (changed or force or INDEX is None):
             INDEX = indexer.build(new)          # built fully, then swapped in one assignment
             STATE["last_changed"] = _iso()
-        STATE.update(last_checked=_iso(), _checked_ts=time.time(), report=report,
+        STATE.update(last_checked=_iso(), _checked_ts=time.time(), report=_slim(report),
                      last_result=f"ok: {len(changed)} page(s) changed, {len(new)} total")
     except Exception as e:                       # the old index keeps serving
         log.exception("refresh failed")
         STATE["last_result"] = f"error: {e}"
     finally:
         STATE["running"] = False
+        old = new = report = None
         gc.collect()
         LOCK.release()
     return {"result": STATE["last_result"]}
