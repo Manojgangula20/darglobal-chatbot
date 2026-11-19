@@ -1,110 +1,223 @@
----
-title: DarGlobal Wasalt Assistant
-emoji: 🏙️
-colorFrom: green
-colorTo: blue
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # DarGlobal & Wasalt Assistant
 
-A RAG chatbot that answers questions about **DarGlobal** and **Wasalt** using only their public website content.
-It refreshes its own data automatically and never serves stale answers for long.
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
+![Render](https://img.shields.io/badge/Deployed%20on-Render-46E3B7?logo=render&logoColor=white)
+
+An AI chatbot that answers questions about **DarGlobal** and **Wasalt** using only what their public websites say. Every answer links to the pages it came from, and when the data does not cover a question, the bot says so instead of guessing.
+
+**Live demo:** https://darglobal-chatbot-fhf9.onrender.com
+
+---
+
+## Highlights
+
+| | |
+|---|---|
+| **Grounded answers** | Answers come only from scraped website content. If it is not there, the bot replies "I don't have that information". |
+| **Verifiable sources** | The model tags which pages it used, so the links under each answer are the pages the answer actually came from. |
+| **Hybrid search** | Local semantic embeddings plus BM25 keyword search, merged with reciprocal rank fusion. Finds pages by meaning and by exact terms. |
+| **Always fresh** | Hourly refresh with change detection. Only changed pages are re-embedded. |
+| **Safe updates** | A new index is built in full, then swapped in. A failed or suspiciously small scrape never replaces good data. |
+| **Free to run** | Local embeddings (no API key) and a free OpenRouter model with automatic fallbacks. |
+
+---
+
+## Example questions
+
+- What does DarGlobal do?
+- What is Wasalt?
+- What projects does DarGlobal have in Oman?
+- What perks come with owning an AIDA residence?
+
+Questions the public sites do not answer (for example exact registration fees or projected yields) get an honest "I don't have that information" reply.
+
+---
 
 ## How it works
-```
-scraper → clean text → chunks → local embeddings → in-memory index
-user question → top-k chunks → OpenRouter free model → answer + source links
-```
-- **Scraping** (`app/scraper.py`): DarGlobal and Wasalt English pages (sitemap + link crawl), plus the Wasalt blog via its WordPress REST API. Respects `robots.txt`, uses a polite delay and a clear User-Agent, skips property listings, login and payment pages.
-- **Change detection**: conditional GET (ETag / Last-Modified) plus a SHA-256 hash of each page's text. Only changed pages are re-embedded (embedding cache keyed by chunk hash).
-- **Safe refresh**: the new index is built fully, then swapped in atomically. If a site is down or a scrape returns far less than before, the previous data is kept.
-- **Embeddings**: `all-MiniLM-L6-v2` via fastembed (ONNX, local, no API key). Cosine search with NumPy (the corpus is small).
-- **LLM**: OpenRouter free model, configurable by env var, with automatic fallback models and retries.
-- **Grounding**: strict prompt, answers only from retrieved context, otherwise says it doesn't have the information. Sources are shown under each answer.
 
-## Freshness
+```
+Scrape (DarGlobal, Wasalt, Wasalt blog)
+        |
+        v
+Clean text -> chunks -> local embeddings -> in-memory index (+ BM25 keywords)
+        |
+        v
+User question -> hybrid search -> top-k chunks -> OpenRouter free model
+        |
+        v
+Answer + source links
+```
+
+### Data sources
+
+| Source | Method |
+|---|---|
+| DarGlobal (`darglobal.co.uk`) | English pages via sitemap and link crawl |
+| Wasalt (`wasalt.sa`) | English pages via sitemap and link crawl; property listings, login and payment pages are skipped |
+| Wasalt blog (`blog.wasalt.sa`) | WordPress REST API, latest posts |
+
+The scraper respects `robots.txt`, waits between requests, and identifies itself with a clear User-Agent.
+
+### Keeping data up to date
 
 | What | How often |
 |---|---|
-| In-app data refresh | every `REFRESH_INTERVAL_MIN` (default 60) minutes |
-| Safety net | `/health` starts a background refresh if data is older than the interval |
-| Manual | `POST /refresh` with header `X-Refresh-Token` |
+| In-app refresh | Every `REFRESH_INTERVAL_MIN` minutes (default 60) |
+| Safety net | `/health` starts a background refresh if the data is older than the interval |
+| Manual refresh | `POST /refresh` with header `X-Refresh-Token` |
+| Keep-alive (optional) | Cloudflare Workers cron in `cloudflare-cron/` pings `/health` so the free instance does not sleep |
 
-## Endpoints
-`GET /` chat UI · `POST /chat` · `GET /health` · `GET /status` · `POST /refresh`
+Change detection uses conditional requests (ETag / Last-Modified) plus a SHA-256 hash of each page's text.
 
-## Run locally
-```bash
-python -m venv .venv && source .venv/bin/activate
+---
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Backend | FastAPI, Uvicorn, APScheduler |
+| Scraping | requests, BeautifulSoup, lxml |
+| Embeddings | `all-MiniLM-L6-v2` through FastEmbed (ONNX, runs locally) |
+| Search | NumPy cosine similarity + BM25, fused with reciprocal rank fusion |
+| LLM | Any free model on OpenRouter, with fallbacks |
+| UI | Single static page, no framework |
+| Packaging | Docker |
+| Hosting | Render |
+
+---
+
+## API
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /` | Chat interface |
+| `POST /chat` | Ask a question. Body: `{"message": "...", "history": []}` |
+| `GET /health` | Liveness check (also triggers a refresh if data is stale) |
+| `GET /status` | Last refresh time, chunks per source, last result |
+| `POST /refresh` | Force a refresh. Requires header `X-Refresh-Token` |
+
+---
+
+## Quick start
+
+### Run locally
+
+**PowerShell (Windows)**
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python -m app.cli dry-run          # check what will be scraped (8 pages per site, nothing saved)
-python -m app.cli scrape           # full scrape -> seed/pages.json
+
+python -m app.cli dry-run        # preview what will be scraped, saves nothing
+python -m app.cli scrape         # full scrape -> seed/pages.json
+
+$env:OPENROUTER_API_KEY = "sk-or-..."
+python -m app.cli ask "What is Wasalt?"
+uvicorn app.main:app --port 7860
+```
+
+**Bash (macOS / Linux)**
+```bash
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+
+python -m app.cli dry-run
+python -m app.cli scrape
+
 export OPENROUTER_API_KEY=sk-or-...
 python -m app.cli ask "What is Wasalt?"
-uvicorn app.main:app --port 7860   # open http://localhost:7860
+uvicorn app.main:app --port 7860
 ```
 
-## Docker
+Then open http://localhost:7860.
+
+### Run with Docker
+
 ```bash
 docker build -t darglobal-bot .
-docker run -p 7860:7860 -e OPENROUTER_API_KEY=sk-or-... -e REFRESH_TOKEN=secret darglobal-bot
+docker run -p 7860:7860 \
+  -e OPENROUTER_API_KEY=sk-or-... \
+  -e REFRESH_TOKEN=choose-a-secret \
+  darglobal-bot
 ```
 
-## Deploy (Render)
+### Deploy on Render
 
-The application is deployed as a Docker web service on Render.
+1. Create a **Web Service** on [Render](https://render.com/) and connect this repository.
+2. Select **Docker** as the runtime and `main` as the branch.
+3. Add the environment variables below.
+4. Deploy, then open the generated URL.
+5. Optional: set Render's health check path to `/health`.
 
-1. Create a new Web Service on [Render](https://render.com/).
-2. Connect this GitHub repository.
-3. Select **Docker** as the runtime.
-4. Set the deployment branch to `main`.
-5. Add the following environment variables under Environment:
+---
 
-   - `OPENROUTER_API_KEY` — required, OpenRouter API key.
-   - `REFRESH_TOKEN` — token used to protect manual refresh requests.
-   - `MODEL_PRIMARY` — primary OpenRouter model (optional).
-   - `MODEL_FALLBACKS` — comma-separated fallback models (optional).
-   - `REFRESH_INTERVAL_MIN` — automatic refresh interval in minutes (default: 60).
+## Configuration
 
-6. Deploy the service. Render builds the Docker image and starts the application.
-7. Open the generated Render URL.
+| Variable | Required | Description |
+|---|---|---|
+| `OPENROUTER_API_KEY` | Yes | OpenRouter API key |
+| `REFRESH_TOKEN` | Recommended | Protects `POST /refresh` |
+| `MODEL_PRIMARY` | No | Primary OpenRouter model (use a `:free` model) |
+| `MODEL_FALLBACKS` | No | Comma-separated fallback models |
+| `REFRESH_INTERVAL_MIN` | No | Minutes between automatic refreshes (default 60) |
+| `TOP_K` | No | Chunks passed to the model (default 7, 10 recommended) |
 
-### Health check
+See `.env.example` for a template.
 
-Render can monitor the application using:
+---
 
-`/health`
+## Project structure
 
-The application also exposes:
+```
+.
+├── app/
+│   ├── main.py          FastAPI app, endpoints, scheduler
+│   ├── scraper.py       Crawling, robots.txt, change detection, blog API
+│   ├── indexer.py       Chunking, embeddings cache, hybrid search
+│   ├── rag.py           Prompt, OpenRouter calls with fallback, source selection
+│   ├── refresh.py       Refresh job and safe index swap
+│   ├── store.py         Snapshot storage
+│   ├── cli.py           dry-run / scrape / build / ask
+│   ├── config.py        Settings and site definitions
+│   └── static/index.html
+├── seed/pages.json      Committed data snapshot used at startup
+├── cloudflare-cron/     Optional keep-alive worker
+├── Dockerfile
+├── requirements.txt
+└── .env.example
+```
 
-- `/` — chatbot interface.
-- `/chat` — chatbot API.
-- `/status` — index and refresh status.
-- `/refresh` — manually trigger a refresh (requires `X-Refresh-Token`).
+---
 
-### Resource constraints and design decisions
+## Design decisions
 
-The application targets a lightweight hosting environment (approximately 512 MB RAM and 0.1 CPU).
+- **Committed snapshot:** `seed/pages.json` lets the app answer immediately after any restart, then refresh itself.
+- **Local embeddings:** no external embedding API, which keeps the project free and the memory footprint small (the target is about 512 MB RAM).
+- **Hybrid search:** semantic search alone missed pages that use exact words such as "membership" or "concierge", so keyword search is merged in.
+- **Attribution:** marketing claims (rankings, projections, benefits) are presented as the company's own statements.
+- **Refresh safety:** if a scrape fails or returns far less content than before, the previous data stays live.
 
-- **Local embeddings:** `all-MiniLM-L6-v2` runs through FastEmbed and ONNX. No external embedding API is required.
-- **Committed snapshot:** `seed/pages.json` provides the initial website data so the application can initialize without requiring a successful live scrape during startup.
-- **Incremental processing:** Unchanged pages reuse cached embeddings.
-- **Atomic index replacement:** A new index is built before replacing the active index.
-- **Refresh safety:** If scraping fails or returns substantially less content than expected, the previous index remains available.
-- **LLM usage:** OpenRouter free models are subject to provider rate limits and availability. Fallback models can be configured through environment variables.
+---
 
-### Known limitations
+## Known limitations
 
-- Render filesystem storage may be ephemeral, so runtime data and embedding caches can be lost after a restart.
-- The committed snapshot can become outdated until the next successful refresh.
-- Free OpenRouter models may return HTTP 429 or experience temporary outages.
-- The in-memory index and refresh state are designed for a single application instance.
-- Answers are limited to the scraped public website content, with source links provided for verification.
+- Free hosting storage can be ephemeral, so runtime caches may be rebuilt after a restart. The committed snapshot covers this.
+- The data is a snapshot of public pages. It can lag behind the websites until the next refresh.
+- Free OpenRouter models can be rate-limited or briefly unavailable. Fallback models are tried automatically.
+- The index and refresh state are designed for a single application instance.
+- The first request after a long idle period on a free instance can be slow.
 
-## Notes and limits
-- Free hosting disk is ephemeral; the committed `seed/pages.json` snapshot makes the bot work immediately after any restart, then it refreshes itself.
-- Free OpenRouter models can be rate-limited; fallbacks are tried automatically.
-- Data is a snapshot of public pages; the answer sources are linked so it can be verified.
+---
+
+## Assignment requirements
+
+| Requirement | How it is met |
+|---|---|
+| Scrape public data from DarGlobal and Wasalt | `app/scraper.py` collects pages from both sites and the Wasalt blog |
+| Build an AI chatbot using the collected data | Retrieval-augmented chatbot with sourced answers |
+| Use a free OpenRouter model | Configurable `:free` models with fallbacks |
+| Containerise with Docker | `Dockerfile` in this repository |
+| Deploy, not only source code | Docker web service on Render |
+| Provide a working URL | See **Live demo** at the top |

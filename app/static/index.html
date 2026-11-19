@@ -4,64 +4,74 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DarGlobal &amp; Wasalt Assistant</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🏙️%3C/text%3E%3C/svg%3E">
 <style>
-:root{--bg:#eef1f0;--panel:#fff;--ink:#14212b;--muted:#5d6b75;--line:#d5dcdb;--accent:#0f6b5c;--accent-ink:#fff;--user:#14212b;--user-ink:#fff}
-@media (prefers-color-scheme:dark){:root{--bg:#0f1719;--panel:#172326;--ink:#e6eeee;--muted:#93a4a8;--line:#27393d;--accent:#4fc4ae;--accent-ink:#07211c;--user:#4fc4ae;--user-ink:#07211c}}
+:root{--bg:#eef1f0;--panel:#fff;--ink:#14212b;--muted:#5d6b75;--line:#d5dcdb;--accent:#0f6b5c;--accent-ink:#fff;--user:#14212b;--user-ink:#fff;--ok:#2e9e6b}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1719;--panel:#172326;--ink:#e6eeee;--muted:#93a4a8;--line:#27393d;--accent:#4fc4ae;--accent-ink:#07211c;--user:#4fc4ae;--user-ink:#07211c;--ok:#4fc4ae}}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;justify-content:center}
-.app{width:100%;max-width:760px;height:100%;display:flex;flex-direction:column;padding:0 16px}
-header{padding:22px 0 14px}
-h1{margin:0;font:600 1.6rem/1.2 "Iowan Old Style","Palatino Linotype",Georgia,serif;letter-spacing:-.01em}
+.app{width:100%;max-width:780px;height:100%;height:100dvh;display:flex;flex-direction:column;padding:0 16px}
+header{padding:20px 0 12px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+h1{margin:0;font:600 1.55rem/1.2 "Iowan Old Style","Palatino Linotype",Georgia,serif;letter-spacing:-.01em}
 .sub{margin:4px 0 0;color:var(--muted);font-size:.92rem}
-#log{flex:1;overflow-y:auto;padding:8px 0 16px;display:flex;flex-direction:column;gap:14px}
-.msg{max-width:88%;padding:11px 15px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.ghost{font:inherit;font-size:.88rem;padding:7px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;white-space:nowrap}
+.ghost:hover{border-color:var(--accent)}
+#log{flex:1;overflow-y:auto;padding:8px 0 16px;display:flex;flex-direction:column;gap:14px;scroll-behavior:smooth}
+.msg{max-width:90%;padding:11px 15px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere}
 .bot{background:var(--panel);border:1px solid var(--line);align-self:flex-start;border-top-left-radius:4px;white-space:normal}
 .me{background:var(--user);color:var(--user-ink);align-self:flex-end;border-top-right-radius:4px}
-.msg p{margin:0 0 .5em}
+.msg p{margin:0 0 .55em}
 .msg p:last-child{margin-bottom:0}
-.msg ul,.msg ol{margin:.3em 0 .5em;padding-left:1.3em}
-.msg li{margin:.15em 0}
-.src{margin-top:9px;padding-top:8px;border-top:1px solid var(--line);font-size:.84rem;color:var(--muted);white-space:normal}
-.src a{color:var(--accent);display:block;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msg ul,.msg ol{margin:.3em 0 .55em;padding-left:1.3em}
+.msg li{margin:.18em 0}
+.hint{margin-top:8px;color:var(--muted);font-size:.85rem}
+.retry{margin-top:8px}
+.src{margin-top:10px;padding-top:9px;border-top:1px solid var(--line);font-size:.84rem;color:var(--muted);white-space:normal}
+.src a{color:var(--accent);display:block;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:1px 0}
 .src a:hover{text-decoration:underline}
-.chips{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 4px}
-.chip{font:inherit;font-size:.9rem;padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.chip-title{color:var(--muted);font-size:.85rem;margin:2px 0 6px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:inherit;font-size:.9rem;padding:8px 13px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;text-align:left}
 .chip:hover{border-color:var(--accent)}
 form{display:flex;gap:10px;padding:10px 0 8px}
-input{flex:1;font:inherit;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+input{flex:1;min-width:0;font:inherit;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
 button.send{font:inherit;font-weight:600;padding:0 20px;border:0;border-radius:12px;background:var(--accent);color:var(--accent-ink);cursor:pointer}
-button:disabled{opacity:.55;cursor:default}
+button:disabled{opacity:.5;cursor:default}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-footer{padding:0 0 14px;color:var(--muted);font-size:.8rem}
+footer{padding:0 0 14px;color:var(--muted);font-size:.8rem;display:flex;align-items:center;gap:7px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--line);flex:none}
+.dot.ok{background:var(--ok)}
 .dots span{display:inline-block;width:6px;height:6px;margin:0 2px;border-radius:50%;background:var(--muted);animation:b 1s infinite}
 .dots span:nth-child(2){animation-delay:.15s}.dots span:nth-child(3){animation-delay:.3s}
 @keyframes b{0%,80%,100%{opacity:.25}40%{opacity:1}}
-@media (prefers-reduced-motion:reduce){.dots span{animation:none;opacity:.6}}
+@media (prefers-reduced-motion:reduce){.dots span{animation:none;opacity:.6}#log{scroll-behavior:auto}}
+@media (max-width:480px){h1{font-size:1.3rem}.sub{font-size:.85rem}.msg{max-width:96%}}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <h1>DarGlobal &amp; Wasalt Assistant</h1>
-    <p class="sub">Ask about the companies, their projects and services. Answers come from their public websites.</p>
+    <div>
+      <h1>DarGlobal &amp; Wasalt Assistant</h1>
+      <p class="sub">Ask about the companies, their projects and services. Answers come from their public websites.</p>
+    </div>
+    <button class="ghost" id="reset" type="button">New chat</button>
   </header>
-  <div id="log" aria-live="polite">
-    <div class="msg bot">Hello. What would you like to know about DarGlobal or Wasalt?</div>
-    <div class="chips" id="chips"></div>
-  </div>
-  <form id="f">
-    <input id="q" placeholder="Ask a question" autocomplete="off" maxlength="1000" aria-label="Your question">
-    <button class="send" id="go">Send</button>
+
+  <div id="log" aria-live="polite"></div>
+
+  <form id="f" autocomplete="off">
+    <input id="q" placeholder="Ask a question about DarGlobal or Wasalt" maxlength="1000" aria-label="Your question">
+    <button class="send" id="go" disabled>Send</button>
   </form>
-  <footer id="fresh">Checking data freshness…</footer>
+  <footer><span class="dot" id="dot"></span><span id="fresh">Checking data freshness…</span></footer>
 </div>
+
 <script>
 const log=document.getElementById('log'),q=document.getElementById('q'),go=document.getElementById('go');
-const history=[];
 const ideas=["What does DarGlobal do?","What is Wasalt?","What projects does DarGlobal have in Oman?","What perks come with owning an AIDA residence?"];
-const chips=document.getElementById('chips');
-ideas.forEach(t=>{const b=document.createElement('button');b.type='button';b.className='chip';b.textContent=t;b.onclick=()=>ask(t);chips.appendChild(b)});
+let convo=[],busy=false;
 
 function add(cls,text){const d=document.createElement('div');d.className='msg '+cls;d.textContent=text;log.appendChild(d);log.scrollTop=log.scrollHeight;return d}
 
@@ -70,9 +80,8 @@ function md(text){
   const frag=document.createDocumentFragment();
   let list=null,kind=null;
   const inline=(el,s)=>s.split(/(\*\*[^*]+\*\*)/g).forEach(p=>{
-    if(p.length>4&&p.startsWith('**')&&p.endsWith('**')){
-      const b=document.createElement('strong');b.textContent=p.slice(2,-2);el.appendChild(b);
-    }else if(p){el.appendChild(document.createTextNode(p))}
+    if(p.length>4&&p.startsWith('**')&&p.endsWith('**')){const b=document.createElement('strong');b.textContent=p.slice(2,-2);el.appendChild(b)}
+    else if(p){el.appendChild(document.createTextNode(p))}
   });
   text.split('\n').forEach(line=>{
     if(!line.trim())return;
@@ -89,35 +98,83 @@ function md(text){
   return frag;
 }
 
-async function ask(text){
-  text=text.trim();if(!text)return;
-  chips.remove();q.value='';go.disabled=true;
-  add('me',text);
-  const wait=add('bot','');wait.innerHTML='<span class="dots"><span></span><span></span><span></span></span>';
-  try{
-    const r=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,history:history.slice(-6)})});
-    if(r.status===429){wait.textContent='You are sending questions a little too fast. Please wait a few seconds and try again.';go.disabled=false;q.focus();return}
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const d=await r.json();
-    wait.textContent='';
-    wait.appendChild(md(d.answer));
-    if(d.sources&&d.sources.length){
-      const s=document.createElement('div');s.className='src';s.append('Sources');
-      d.sources.forEach(x=>{const a=document.createElement('a');a.href=x.url;a.target='_blank';a.rel='noopener';a.textContent=x.title;s.appendChild(a)});
-      wait.appendChild(s);
-    }
-    history.push({role:'user',content:text},{role:'assistant',content:d.answer});
-  }catch(e){wait.textContent='Something went wrong while reaching the server. Please try again.'}
-  go.disabled=false;q.focus();log.scrollTop=log.scrollHeight;
+function renderBot(el,d){
+  el.textContent='';
+  el.appendChild(md(d.answer));
+  if(d.sources&&d.sources.length){
+    const s=document.createElement('div');s.className='src';s.append('Sources');
+    d.sources.forEach(x=>{const a=document.createElement('a');a.href=x.url;a.target='_blank';a.rel='noopener';a.textContent=x.title;s.appendChild(a)});
+    el.appendChild(s);
+  }
 }
-document.getElementById('f').onsubmit=e=>{e.preventDefault();ask(q.value)};
 
-fetch('/status').then(r=>r.json()).then(s=>{
-  const t=s.last_checked?new Date(s.last_checked).toLocaleString():'not yet';
-  const m=s.refresh_interval_min;
-  const every=m>=1440?'daily':m>=60?'every '+Math.round(m/60)+' hours':'every '+m+' minutes';
-  document.getElementById('fresh').textContent='Data last checked: '+t+' · refreshed automatically '+every;
-}).catch(()=>{document.getElementById('fresh').textContent=''});
+function start(){
+  log.textContent='';convo=[];
+  add('bot','Hello. What would you like to know about DarGlobal or Wasalt?');
+  const box=document.createElement('div');box.id='pop';
+  const t=document.createElement('div');t.className='chip-title';t.textContent='Try asking';
+  const row=document.createElement('div');row.className='chips';
+  ideas.forEach(i=>{const b=document.createElement('button');b.type='button';b.className='chip';b.textContent=i;b.onclick=()=>ask(i);row.appendChild(b)});
+  box.append(t,row);log.appendChild(box);
+  q.focus();
+}
+
+function setBusy(v){busy=v;go.disabled=v||!q.value.trim()}
+
+async function ask(text){
+  text=text.trim();if(!text||busy)return;
+  const pop=document.getElementById('pop');if(pop)pop.remove();
+  q.value='';setBusy(true);
+  add('me',text);
+  const wait=add('bot','');
+  wait.innerHTML='<span class="dots"><span></span><span></span><span></span></span> Searching the data…';
+  const slow=setTimeout(()=>{
+    const h=document.createElement('div');h.className='hint';
+    h.textContent='The free server may be waking up. The first answer can take up to a minute.';
+    wait.appendChild(h);log.scrollTop=log.scrollHeight;
+  },8000);
+  const ctl=new AbortController(),kill=setTimeout(()=>ctl.abort(),90000);
+  try{
+    const r=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},signal:ctl.signal,
+      body:JSON.stringify({message:text,history:convo.slice(-6)})});
+    if(r.status===429){fail(wait,text,'You are sending questions a little too fast. Please wait a few seconds and try again.')}
+    else if(!r.ok){throw new Error('HTTP '+r.status)}
+    else{
+      const d=await r.json();
+      renderBot(wait,d);
+      convo.push({role:'user',content:text},{role:'assistant',content:d.answer});
+    }
+  }catch(e){
+    fail(wait,text,e.name==='AbortError'?'This is taking too long.':'Something went wrong while reaching the server.')
+  }
+  clearTimeout(slow);clearTimeout(kill);
+  setBusy(false);q.focus();log.scrollTop=log.scrollHeight;
+}
+
+function fail(el,text,msg){
+  el.textContent=msg+' ';
+  const b=document.createElement('button');b.type='button';b.className='ghost retry';b.textContent='Try again';
+  b.onclick=()=>{el.previousElementSibling&&el.previousElementSibling.remove();el.remove();ask(text)};
+  el.appendChild(document.createElement('br'));el.appendChild(b);
+}
+
+document.getElementById('f').onsubmit=e=>{e.preventDefault();ask(q.value)};
+q.addEventListener('input',()=>{go.disabled=busy||!q.value.trim()});
+document.getElementById('reset').onclick=()=>{if(!busy)start()};
+
+function ago(iso){
+  const m=Math.max(0,Math.round((Date.now()-new Date(iso).getTime())/60000));
+  if(m<1)return 'just now';if(m<60)return m+' min ago';
+  const h=Math.round(m/60);return h<48?h+' h ago':Math.round(h/24)+' days ago';
+}
+function loadStatus(){
+  fetch('/status').then(r=>r.json()).then(s=>{
+    const mins=s.refresh_interval_min,every=mins>=1440?'daily':mins>=60?'every '+Math.round(mins/60)+' h':'every '+mins+' min';
+    document.getElementById('fresh').textContent=(s.last_checked?'Data checked '+ago(s.last_checked):'Data not checked yet')+' · auto-refresh '+every;
+    document.getElementById('dot').className='dot ok';
+  }).catch(()=>{document.getElementById('fresh').textContent=''});
+}
+start();loadStatus();setInterval(loadStatus,5*60*1000);
 </script>
 </body>
 </html>
