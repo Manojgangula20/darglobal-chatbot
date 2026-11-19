@@ -1,5 +1,6 @@
 import logging, threading, time
 from datetime import datetime, timezone
+import gc
 
 from . import config as C, indexer, scraper, store
 
@@ -50,6 +51,7 @@ def refresh(force: bool = False) -> dict:
         STATE["last_result"] = f"error: {e}"
     finally:
         STATE["running"] = False
+        gc.collect()
         LOCK.release()
     return {"result": STATE["last_result"]}
 

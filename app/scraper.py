@@ -63,24 +63,26 @@ def path_ok(cfg: dict, path: str) -> bool:
     return not inc or any(re.search(x, path, re.I) for x in inc)
 
 
-def sitemap_urls(root: str, max_maps: int = 10) -> list[str]:
+def sitemap_urls(root: str, max_maps: int = 5, max_urls: int = 3000) -> list[str]:
     out, seen = [], set()
     todo = list(_rp(root).site_maps() or [root + "/sitemap.xml"])
-    while todo and len(seen) < max_maps:
+    while todo and len(seen) < max_maps and len(out) < max_urls:
         sm = todo.pop(0)
         if sm in seen:
             continue
         seen.add(sm)
         try:
-            r = S.get(sm, timeout=20)
-            if r.status_code != 200:
-                continue
-            soup = BeautifulSoup(r.content, "xml")
+            with S.get(sm, timeout=20, stream=True) as r:
+                if r.status_code != 200:
+                    continue
+                body = r.raw.read(5_000_000, decode_content=True)   # cap at 5 MB
         except Exception:
             continue
-        for loc in soup.find_all("loc"):
-            u = loc.get_text(strip=True)
-            (todo if u.lower().endswith(".xml") else out).append(u)
+        for u in re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", body.decode("utf-8", "ignore")):
+            if u.lower().endswith(".xml"):
+                todo.append(u)
+            elif len(out) < max_urls:
+                out.append(u)
     return out
 
 

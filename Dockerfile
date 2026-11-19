@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 # Hugging Face Spaces / Render: run as a non-root user
 RUN useradd -m -u 1000 user
-ENV HOME=/home/user PATH=/home/user/.local/bin:$PATH PYTHONUNBUFFERED=1
+ENV HOME=/home/user PATH=/home/user/.local/bin:$PATH PYTHONUNBUFFERED=1 MALLOC_ARENA_MAX=2 OMP_NUM_THREADS=1
 
 # WORKDIR alone would create this folder as root, so create it as user's first
 RUN mkdir -p /home/user/app && chown -R user:user /home/user/app

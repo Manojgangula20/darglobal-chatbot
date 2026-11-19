@@ -19,12 +19,12 @@ def _embedder():
     with _model_lock:
         if _model is None:
             from fastembed import TextEmbedding
-            _model = TextEmbedding(model_name=C.EMBED_MODEL, cache_dir=str(C.MODEL_CACHE))
+            _model = TextEmbedding(model_name=C.EMBED_MODEL, cache_dir=str(C.MODEL_CACHE), threads=1)
     return _model
 
 
 def embed(texts: list[str]) -> np.ndarray:
-    arr = np.array(list(_embedder().embed(texts)), dtype="float32")
+    arr = np.array(list(_embedder().embed(texts, batch_size=8)), dtype="float32")
     return arr / (np.linalg.norm(arr, axis=1, keepdims=True) + 1e-9)
 
 
