@@ -194,7 +194,7 @@ See `.env.example` for a template.
 ## Design decisions
 
 - **Committed snapshot:** `seed/pages.json` lets the app answer immediately after any restart, then refresh itself.
-- **Local embeddings:** no external embedding API, which keeps the project free and the memory footprint small (the target is about 512 MB RAM).
+- **Local embeddings:** no external embedding API, which keeps the project free and memory footprint small.
 - **Hybrid search:** semantic search alone missed pages that use exact words such as "membership" or "concierge", so keyword search is merged in.
 - **Attribution:** marketing claims (rankings, projections, benefits) are presented as the company's own statements.
 - **Refresh safety:** if a scrape fails or returns far less content than before, the previous data stays live.
