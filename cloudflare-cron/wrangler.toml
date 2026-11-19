@@ -3,7 +3,7 @@ main = "worker.js"
 compatibility_date = "2024-11-01"
 
 [triggers]
-crons = ["*/15 * * * *"]
+crons = ["*/10 * * * *"]
 
 [vars]
-APP_URL = "https://YOUR-USERNAME-YOUR-SPACE.hf.space"
+APP_URL = "https://darglobal-chatbot-fhf9.onrender.com/"

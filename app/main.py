@@ -59,8 +59,18 @@ def manual_refresh(x_refresh_token: str = Header(default="")):
     return R.refresh(force=True)
 
 
+from fastapi import Request
+
 @app.post("/chat")
-def chat(body: ChatIn):
+def chat(body: ChatIn, request: Request):
+    ip = (request.headers.get("x-forwarded-for") or request.client.host or "?").split(",")[0].strip()
+    now = time.time()
+    q = chat_requests[ip]
+    while q and now - q[0] > CHAT_WINDOW:
+        q.popleft()
+    if len(q) >= CHAT_LIMIT:
+        raise HTTPException(status_code=429, detail="Too many requests")
+    q.append(now)
     idx = R.INDEX
     if idx is None or not idx.chunks:
         return {"answer": "I'm still loading my data. Please try again in a minute.", "sources": []}

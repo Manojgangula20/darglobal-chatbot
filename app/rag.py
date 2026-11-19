@@ -1,4 +1,4 @@
-import logging, time
+import logging, re, time
 import requests
 from . import config as C
 
@@ -8,10 +8,11 @@ API = "https://openrouter.ai/api/v1/chat/completions"
 INSTRUCTIONS = """You are the assistant for DarGlobal (international luxury real estate developer) and Wasalt (Saudi real estate platform).
 Rules:
 - Answer ONLY using the CONTEXT below. If the answer is not in the context, say: "I don't have that information in my data about DarGlobal and Wasalt." Do not guess or invent facts, numbers or names.
-- Be clear and concise. Use short paragraphs or bullets when listing.
+- Be clear and concise. Keep answers under about 250 words. Use short paragraphs or bullets when listing.
 - If the user only greets you, greet back briefly and say what you can help with.
 - If the question concerns both companies, cover both when the context allows.
 - Treat marketing claims (rankings, projections, tax or investment benefits) as the company's own statements and attribute them, for example "According to DarGlobal's website, ...". Do not present them as independent facts.
+- After each factual statement, add the number of the context block it came from in square brackets, like [2]. Never invent numbers.
 """
 
 
@@ -31,7 +32,7 @@ def _call_llm(prompt: str) -> str | None:
         for attempt in range(2):
             try:
                 r = requests.post(API, headers=headers, timeout=60, json={
-                    "model": model, "temperature": 0.2, "max_tokens": 700,
+                    "model": model, "temperature": 0.2, "max_tokens": 1200,
                     # single user message: some free models reject the system role
                     "messages": [{"role": "user", "content": prompt}]})
                 if r.status_code == 200:
@@ -49,37 +50,30 @@ def _call_llm(prompt: str) -> str | None:
 
 
 def answer(question: str, history: list, index) -> dict:
-    prev = next(
-        (m["content"] for m in reversed(history) if m.get("role") == "user"),
-        ""
-    )
-    query = (
-        f"{prev[:300]} {question}"
-        if prev and len(question.split()) < 8
-        else question
-    )
+    prev = next((m["content"] for m in reversed(history) if m.get("role") == "user"), "")
+    query = f"{prev[:300]} {question}" if prev and len(question.split()) < 8 else question
 
     hits = index.search(query)
     text = _call_llm(_prompt(question, history, hits))
-
     if text is None:
-        return {
-            "answer": "The AI model is busy or unavailable right now. Please try again in a moment.",
-            "sources": []
-        }
+        return {"answer": "The AI model is busy or unavailable right now. Please try again in a moment.",
+                "sources": []}
 
-    if text.replace("’", "'").strip().lower().startswith(
-        "i don't have that information"
-    ):
-        return {"answer": text, "sources": []}
+    # which context blocks did the model actually use?
+    cited = []
+    for group in re.findall(r"\[(\d+(?:\s*,\s*\d+)*)\]", text):
+        for n in (int(x) for x in group.split(",")):
+            if 1 <= n <= len(hits) and n not in cited:
+                cited.append(n)
+    clean = re.sub(r"\s*\[\d+(?:\s*,\s*\d+)*\]", "", text).strip()
 
+    if clean.replace("’", "'").lower().startswith("i don't have that information"):
+        return {"answer": clean, "sources": []}
+
+    chosen = [hits[n - 1][0] for n in cited] or [c for c, _ in hits[:3]]   # fallback: top 3
     seen, sources = set(), []
-    for c, _ in hits:
+    for c in chosen:
         if c["url"] not in seen and len(sources) < 4:
             seen.add(c["url"])
-            sources.append({
-                "title": c["title"] or c["url"],
-                "url": c["url"]
-            })
-
-    return {"answer": text, "sources": sources}
+            sources.append({"title": c["title"] or c["url"], "url": c["url"]})
+    return {"answer": clean, "sources": sources}

@@ -1,11 +1,17 @@
-"""Chunking, local embeddings (fastembed/ONNX) with a cache, and a small in-memory vector index."""
-import hashlib, pickle, threading
+"""Chunking, local embeddings (fastembed/ONNX) with a cache, and a hybrid (keyword + semantic) in-memory index."""
+import hashlib, math, pickle, re, threading
+from collections import Counter
+
 import numpy as np
 
 from . import config as C
 
 _model = None
 _model_lock = threading.Lock()
+
+STOP = set("a an the of and or to in on for with is are be what which who how do does can i my me you your "
+           "it its at by from that this these those as about any there their have has all".split())
+_tok = lambda s: re.findall(r"[a-z0-9]+", s.lower())
 
 
 def _embedder():
@@ -39,12 +45,32 @@ def chunk_text(text: str, max_chars: int = 1200, overlap_lines: int = 2) -> list
 class Index:
     def __init__(self, chunks, mat):
         self.chunks, self.mat = chunks, mat
+        self.docs = [Counter(_tok(c["title"] + " " + c["text"])) for c in chunks]
+        self.dl = np.array([sum(d.values()) for d in self.docs], dtype="float32")
+        self.avg = float(self.dl.mean()) if len(self.dl) else 1.0
+        df = Counter(t for d in self.docs for t in d)
+        n = len(self.docs)
+        self.idf = {t: math.log(1 + (n - f + .5) / (f + .5)) for t, f in df.items()}
+
+    def _bm25(self, query: str) -> np.ndarray:
+        terms = [t for t in _tok(query) if t not in STOP]
+        s = np.zeros(len(self.chunks), dtype="float32")
+        for i, d in enumerate(self.docs):
+            for t in terms:
+                f = d.get(t)
+                if f:
+                    s[i] += self.idf.get(t, 0) * f * 2.2 / (f + 1.2 * (0.25 + 0.75 * self.dl[i] / self.avg))
+        return s
 
     def search(self, query: str, k: int = C.TOP_K):
         if not self.chunks:
             return []
-        sims = self.mat @ embed([query])[0]
-        return [(self.chunks[i], float(sims[i])) for i in np.argsort(-sims)[:k]]
+        sem = self.mat @ embed([query])[0]
+        score = np.zeros(len(self.chunks))
+        for arr in (sem, self._bm25(query)):          # reciprocal rank fusion of both rankings
+            for rank, i in enumerate(np.argsort(-arr)[:40]):
+                score[i] += 1 / (60 + rank)
+        return [(self.chunks[i], float(score[i])) for i in np.argsort(-score)[:k]]
 
 
 def _cache_path():
