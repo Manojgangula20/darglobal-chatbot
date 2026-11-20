@@ -19,7 +19,7 @@ MODEL_FALLBACKS = [
     if m.strip()
 ]
 
-REFRESH_INTERVAL_MIN = int(os.getenv("REFRESH_INTERVAL_MIN", "60"))
+REFRESH_INTERVAL_MIN = int(os.getenv("REFRESH_INTERVAL_MIN", "360"))
 REFRESH_TOKEN = os.getenv("REFRESH_TOKEN", "")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 TOP_K = int(os.getenv("TOP_K", "7"))
@@ -68,3 +68,9 @@ BLOG = {
     "max_posts": 600,              # the whole blog, with a safety ceiling
     "per_page": 50,
 }
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "5"))
+NUM_BATCHES = int(os.getenv("NUM_BATCHES", "5"))
+BATCH_GAP_MIN = int(os.getenv("BATCH_GAP_MIN", "60"))
+BATCH_REFRESH_INTERVAL_MIN = int(os.getenv("BATCH_REFRESH_INTERVAL_MIN", "360"))
+CHUNK_MAX_CHARS = int(os.getenv("CHUNK_MAX_CHARS", "900"))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "120"))
