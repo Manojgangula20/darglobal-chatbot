@@ -1,11 +1,10 @@
-
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f5f2eb">
-<title>DarGlobal &amp; Wasalt Assistant</title>
+<title>DarGlobal & Wasalt Assistant</title>
 
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23283e35'/%3E%3Ctext x='50' y='72' text-anchor='middle' font-size='65' fill='%23d7bd8e'%3ED%3C/text%3E%3C/svg%3E">
 
@@ -148,6 +147,7 @@ header {
   flex:1;
   min-height:0;
   overflow-y:auto;
+  overflow-anchor:none;
   padding:24px 2px;
   display:flex;
   flex-direction:column;
@@ -288,6 +288,10 @@ header {
   animation:messageIn .25s ease both;
 }
 
+.msg-row > div {
+  min-width:0;
+}
+
 .bot-row{align-self:flex-start}
 .me-row {
   align-self:flex-end;
@@ -344,6 +348,8 @@ header {
   border-top:1px solid var(--line);
   font-size:11px;
   color:var(--muted);
+  max-width:100%;
+  min-width:0;
 }
 
 .src-label {
@@ -362,6 +368,8 @@ header {
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
+  max-width:100%;
+  min-width:0;
 }
 
 .src a:hover{text-decoration:underline}
@@ -395,6 +403,9 @@ header {
 /* INPUT */
 
 .composer {
+  position:relative;
+  z-index:2;
+  background:var(--bg);
   flex:none;
   padding-top:13px;
   border-top:1px solid var(--line);
@@ -472,6 +483,9 @@ button:disabled{opacity:.45;cursor:default}
 /* ORIGINAL DATA FRESHNESS FOOTER */
 
 footer {
+  position:relative;
+  z-index:2;
+  background:var(--bg);
   flex:none;
   padding:11px 0 14px;
   border-top:1px solid var(--line);
@@ -563,8 +577,8 @@ footer {
       </svg>
     </div>
     <div>
-      <div class="brand-name">DarGlobal &amp; Wasalt</div>
-      <div class="brand-tag">Property &amp; Real Estate Assistant</div>
+      <div class="brand-name">DarGlobal & Wasalt</div>
+      <div class="brand-tag">Property & Real Estate Assistant</div>
     </div>
   </div>
 
@@ -704,6 +718,14 @@ function md(text) {
   return frag;
 }
 
+function normalizeSourceUrl(rawUrl) {
+  const u=new URL(rawUrl,location.origin);
+  if(!['http:','https:'].includes(u.protocol))return null;
+  u.hash='';
+  const cleanPath=u.pathname.replace(/\/+$/,'')||'/';
+  return `${u.origin}${cleanPath}${u.search}`.toLowerCase();
+}
+
 function renderBot(el,d) {
   el.textContent='';
   el.appendChild(md(String(d.answer||'I could not find an answer to that question.')));
@@ -717,23 +739,29 @@ function renderBot(el,d) {
     label.textContent='Sources';
     s.appendChild(label);
 
+    const seen=new Set();
+    let count=0;
+
     d.sources.forEach(x=>{
       if(!x||typeof x.url!=='string')return;
 
       try {
-        const u=new URL(x.url,location.origin);
-        if(!['http:','https:'].includes(u.protocol))return;
+        const key=normalizeSourceUrl(x.url);
+        if(!key||seen.has(key))return;
+        seen.add(key);
 
+        const u=new URL(x.url,location.origin);
         const a=document.createElement('a');
         a.href=u.href;
         a.target='_blank';
         a.rel='noopener noreferrer';
         a.textContent=String(x.title||u.hostname);
         s.appendChild(a);
+        count++;
       } catch(_) {}
     });
 
-    if(s.querySelector('a'))el.appendChild(s);
+    if(count>0)el.appendChild(s);
   }
 }
 
@@ -747,12 +775,12 @@ function start() {
   w.className='welcome';
 
   w.innerHTML=`
-    <div class="eyebrow">Your DarGlobal &amp; Wasalt guide</div>
+    <div class="eyebrow">Your DarGlobal & Wasalt guide</div>
 
     <h2>Discover a world of<br><em>exceptional possibilities.</em></h2>
 
     <p class="welcome-copy">
-      Welcome. I'm your DarGlobal &amp; Wasalt assistant,
+      Welcome. I'm your DarGlobal & Wasalt assistant,
       here to help you explore DarGlobal's luxury real estate
       developments and Wasalt's property platform, services
       and offerings. What would you like to discover?
@@ -863,8 +891,10 @@ async function ask(text) {
     clearTimeout(slow);
     clearTimeout(kill);
     setBusy(false);
-    q.focus();
-    log.scrollTop=log.scrollHeight;
+    q.focus({preventScroll:true});
+    requestAnimationFrame(()=>{
+      log.scrollTop=log.scrollHeight;
+    });
   }
 }
 
