@@ -19,10 +19,10 @@ MODEL_FALLBACKS = [
     if m.strip()
 ]
 
-REFRESH_INTERVAL_MIN = int(os.getenv("REFRESH_INTERVAL_MIN", "60"))
+REFRESH_INTERVAL_MIN = int(os.getenv("REFRESH_INTERVAL_MIN", "360"))
 REFRESH_TOKEN = os.getenv("REFRESH_TOKEN", "")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-TOP_K = int(os.getenv("TOP_K", "7"))
+TOP_K = int(os.getenv("TOP_K", ""))
 
 # memory controls (the target host has about 512 MB RAM)
 EMBED_BATCH = int(os.getenv("EMBED_BATCH", "8"))          # chunks embedded per batch
