@@ -968,7 +968,7 @@ function loadStatus() {
       return r.json();
     })
     .then(s=>{
-      const mins=Number(s.refresh_interval_min);
+      const mins = Number(s.refresh_interval_min ?? s.batch_refresh_interval_min);
       const every=mins>=1440
         ?'daily'
         :mins>=60
