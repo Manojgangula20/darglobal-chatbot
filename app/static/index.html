@@ -432,7 +432,7 @@ form {
 
 .input-wrap:focus-within {
   border-color:var(--accent);
-  box-shadow:0 0 0 3px rgba(177,148,96,.1);
+  box-shadow:0 0 0 3px rgba(177,148,96,.18);
 }
 
 .input-icon{color:var(--muted);flex:none}
@@ -442,10 +442,14 @@ input {
   min-width:0;
   padding:13px 0;
   border:0;
-  outline:0;
+  outline:none;
   background:transparent;
   color:var(--ink);
   font-size:13px;
+}
+
+input:focus-visible {
+  outline:none;
 }
 
 input::placeholder{color:var(--muted)}
@@ -514,7 +518,8 @@ footer {
 
 /* ACCESSIBILITY AND ANIMATIONS */
 
-:focus-visible {
+button:focus-visible,
+a:focus-visible {
   outline:2px solid var(--accent);
   outline-offset:3px;
 }
@@ -718,12 +723,14 @@ function md(text) {
   return frag;
 }
 
-function normalizeSourceUrl(rawUrl) {
+function normalizeSourceKey(rawUrl, rawTitle) {
   const u=new URL(rawUrl,location.origin);
   if(!['http:','https:'].includes(u.protocol))return null;
   u.hash='';
   const cleanPath=u.pathname.replace(/\/+$/,'')||'/';
-  return `${u.origin}${cleanPath}${u.search}`.toLowerCase();
+  const normUrl=`${u.origin}${cleanPath}${u.search}`.toLowerCase();
+  const normTitle=String(rawTitle||'').trim().toLowerCase();
+  return `${normUrl}::${normTitle}`;
 }
 
 function renderBot(el,d) {
@@ -746,16 +753,17 @@ function renderBot(el,d) {
       if(!x||typeof x.url!=='string')return;
 
       try {
-        const key=normalizeSourceUrl(x.url);
+        const u=new URL(x.url,location.origin);
+        const titleText=String(x.title||u.hostname).trim();
+        const key=normalizeSourceKey(x.url,titleText);
         if(!key||seen.has(key))return;
         seen.add(key);
 
-        const u=new URL(x.url,location.origin);
         const a=document.createElement('a');
         a.href=u.href;
         a.target='_blank';
         a.rel='noopener noreferrer';
-        a.textContent=String(x.title||u.hostname);
+        a.textContent=titleText;
         s.appendChild(a);
         count++;
       } catch(_) {}
