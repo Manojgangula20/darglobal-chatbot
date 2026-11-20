@@ -1,3 +1,4 @@
+import asyncio
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 import logging
@@ -47,28 +48,36 @@ def _get_chunk_counts() -> tuple[int, dict[str, int]]:
     return total, by_site
 
 
+async def _init_runtime():
+    global batch_scheduler
+    try:
+        await asyncio.to_thread(R.load_initial)
+        s = R.status()
+        runner = build_batch_runner(
+            get_batch_targets_fn=_get_batch_targets,
+            scrape_page_fn=_scrape_page,
+            upsert_chunks_fn=_upsert_chunks,
+            get_chunk_counts_fn=_get_chunk_counts,
+        )
+        batch_scheduler = BatchRefreshScheduler(
+            num_batches=C.NUM_BATCHES,
+            batch_size=C.BATCH_SIZE,
+            gap_min=C.BATCH_GAP_MIN,
+            refresh_interval_min=C.BATCH_REFRESH_INTERVAL_MIN,
+            run_batch_fn=runner,
+            initial_chunks=int(s.get("chunks", 0)),
+            initial_chunks_by_site=dict(s.get("chunks_by_site", {})),
+        )
+        batch_scheduler.start()
+    except Exception:
+        logging.exception("Background runtime initialization failed")
+
+
 @asynccontextmanager
 async def lifespan(app):
-    global batch_scheduler
-    R.load_initial()
-    s = R.status()
-    runner = build_batch_runner(
-        get_batch_targets_fn=_get_batch_targets,
-        scrape_page_fn=_scrape_page,
-        upsert_chunks_fn=_upsert_chunks,
-        get_chunk_counts_fn=_get_chunk_counts,
-    )
-    batch_scheduler = BatchRefreshScheduler(
-        num_batches=C.NUM_BATCHES,
-        batch_size=C.BATCH_SIZE,
-        gap_min=C.BATCH_GAP_MIN,
-        refresh_interval_min=C.BATCH_REFRESH_INTERVAL_MIN,
-        run_batch_fn=runner,
-        initial_chunks=int(s.get("chunks", 0)),
-        initial_chunks_by_site=dict(s.get("chunks_by_site", {})),
-    )
-    batch_scheduler.start()
+    task = asyncio.create_task(_init_runtime())
     yield
+    task.cancel()
     if batch_scheduler is not None:
         batch_scheduler.stop()
 
