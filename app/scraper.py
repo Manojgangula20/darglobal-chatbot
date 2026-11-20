@@ -443,14 +443,6 @@ def fetch_single_page(site: str, url: str, existing: dict | None = None) -> dict
         log.info("scrape skipped by robots.txt site=%s url=%s", site, url)
         return rec if rec.get("text") else None
     try:
-        resp = _get(url, rec)
-    except Exception as exc:
-        log.warning("sdef fetch_single_page(site: str, url: str, existing: dict | None = None) -> dict | None:
-    rec = dict(existing or {})
-    if not robots_ok(url):
-        log.info("scrape skipped by robots.txt site=%s url=%s", site, url)
-        return rec if rec.get("text") else None
-    try:
         r, body = _get(url, rec)
     except Exception as exc:
         log.warning("scrape request failed site=%s url=%s err=%s", site, url, exc)
