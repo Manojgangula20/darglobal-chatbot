@@ -436,3 +436,55 @@ def scrape_all(existing: dict, limit: int | None = None):
     report[C.BLOG["key"]] = rep
     gc.collect()
     return result, report
+
+def fetch_single_page(site: str, url: str, existing: dict | None = None) -> dict | None:
+    rec = dict(existing or {})
+    if not robots_ok(url):
+        log.info("scrape skipped by robots.txt site=%s url=%s", site, url)
+        return rec if rec.get("text") else None
+    try:
+        resp = _get(url, rec)
+    except Exception as exc:
+        log.warning("sdef fetch_single_page(site: str, url: str, existing: dict | None = None) -> dict | None:
+    rec = dict(existing or {})
+    if not robots_ok(url):
+        log.info("scrape skipped by robots.txt site=%s url=%s", site, url)
+        return rec if rec.get("text") else None
+    try:
+        r, body = _get(url, rec)
+    except Exception as exc:
+        log.warning("scrape request failed site=%s url=%s err=%s", site, url, exc)
+        return rec if rec.get("text") else None
+    if r is None:
+        log.warning("scrape no response site=%s url=%s", site, url)
+        return rec if rec.get("text") else None
+    if r.status_code == 304:
+        log.info("scrape 304/unchanged site=%s url=%s", site, url)
+        if rec.get("text"):
+            rec["fetched_at"] = now_iso()
+            return rec
+        return None
+    if body is None:
+        log.warning("scrape over size limit site=%s url=%s", site, url)
+        return rec if rec.get("text") else None
+    if r.status_code != 200 or "html" not in r.headers.get("content-type", ""):
+        log.warning("scrape unexpected status=%s site=%s url=%s", r.status_code, site, url)
+        return rec if rec.get("text") else None
+    html = body.decode(r.encoding or "utf-8", "ignore")
+    del body
+    title, text, _links = extract(html)
+    if not text:
+        log.info("scrape empty text site=%s url=%s", site, url)
+        return rec if rec.get("text") else None
+    updated = {
+        "url": norm(r.url or url),
+        "site": site,
+        "title": title or rec.get("title") or url,
+        "text": text,
+        "hash": sha((title or "") + text),
+        "etag": r.headers.get("ETag") or rec.get("etag", ""),
+        "last_modified": r.headers.get("Last-Modified") or rec.get("last_modified", ""),
+        "fetched_at": now_iso(),
+    }
+    log.info("scraped live page site=%s url=%s chars=%s", site, url, len(text))
+    return updated

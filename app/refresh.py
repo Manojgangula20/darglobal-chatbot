@@ -48,6 +48,19 @@ def _iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _find_existing_page(pages: dict, site: str, url: str) -> dict | None:
+    if url in pages:
+        return pages[url]
+    norm_u = scraper.norm(url)
+    if norm_u in pages:
+        return pages[norm_u]
+    for rec in pages.values():
+        if rec.get("url") == url or scraper.norm(rec.get("url", "")) == norm_u:
+            if not site or rec.get("site") == site:
+                return rec
+    return None
+
+
 def _build_batch_pages(pages: dict, batch_index: int, batch_size: int) -> dict:
     urls = sorted(pages.keys())
     start = (batch_index - 1) * batch_size
@@ -55,8 +68,21 @@ def _build_batch_pages(pages: dict, batch_index: int, batch_size: int) -> dict:
     selected = urls[start:end]
     batch_pages: dict = {}
 
+    log.info(
+        "batch %s/%s building pages: %s targets",
+        batch_index,
+        NUM_BATCHES,
+        len(selected),
+    )
+
     for u in selected:
-        rec = dict(pages[u])
+        existing = _find_existing_page(pages, pages[u].get("site", "darglobal"), u) or pages[u]
+        site = existing.get("site") or pages[u].get("site") or "darglobal"
+        target_url = existing.get("url") or u
+
+        fetched = scraper.fetch_single_page(site, target_url, existing)
+        rec = dict(fetched or existing)
+
         raw_text = rec.get("text") or rec.get("content") or rec.get("body") or ""
         norm_text = normalize_text(raw_text)
         if norm_text:
@@ -67,6 +93,18 @@ def _build_batch_pages(pages: dict, batch_index: int, batch_size: int) -> dict:
                 max_chars=getattr(C, "CHUNK_MAX_CHARS", 900),
                 overlap=getattr(C, "CHUNK_OVERLAP", 120),
             )
+            log.info(
+                "batch %s prepared url=%s site=%s chunks=%s",
+                batch_index,
+                target_url,
+                site,
+                len(rec["chunks"]),
+            )
+        else:
+            log.warning("batch %s empty normalized text for url=%s", batch_index, target_url)
+
+        rec["site"] = site
+        rec["url"] = target_url
         rec["fetched_at"] = _iso()
         batch_pages[u] = rec
 
@@ -97,6 +135,7 @@ def load_initial():
         STATE["last_changed"] = STATE["last_checked"] = max(r["fetched_at"] for r in pages.values())
         STATE["last_result"] = "loaded snapshot"
         STATE["_checked_ts"] = datetime.fromisoformat(STATE["last_checked"]).timestamp()
+        log.info("loaded initial snapshot: pages=%s chunks=%s", len(pages), len(INDEX.chunks))
     del pages
     gc.collect()
 
@@ -119,8 +158,14 @@ def get_batch_targets(batch_index: int, batch_size: int) -> list[tuple[str, str]
 
 def scrape_single_page(site: str, url: str) -> str:
     pages = store.load_pages() or {}
-    rec = pages.get(url) or {}
-    return rec.get("text") or rec.get("content") or ""
+    existing = _find_existing_page(pages, site, url)
+    fetched = scraper.fetch_single_page(site, url, existing)
+    if fetched and fetched.get("text"):
+        key = url if url in pages else (fetched.get("url") or url)
+        pages[key] = {**(existing or {}), **fetched}
+        store.save_pages(pages)
+        return fetched["text"]
+    return (existing or {}).get("text") or (existing or {}).get("content") or ""
 
 
 def upsert_batch_chunks(prepared_chunks: list[dict]) -> int:
@@ -142,6 +187,7 @@ def upsert_batch_chunks(prepared_chunks: list[dict]) -> int:
 
     store.save_pages(all_pages)
     INDEX = indexer.build(all_pages)
+    log.info("upserted batch chunks: count=%s urls=%s", len(prepared_chunks), len(by_url))
     return len(prepared_chunks)
 
 
@@ -164,6 +210,7 @@ def refresh(force: bool = False, batch_index: int | None = None) -> dict:
     STATE["running"] = True
     STATE["active_batch"] = target
     STATE["_batches"][target - 1]["status"] = "running"
+    log.info("batch %s/%s refresh started (force=%s)", target, NUM_BATCHES, force)
 
     try:
         all_pages = store.load_pages() or {}
@@ -194,6 +241,13 @@ def refresh(force: bool = False, batch_index: int | None = None) -> dict:
             _checked_ts=finished_ts,
             last_result=f"batch {target}/{NUM_BATCHES} completed ({len(batch_updates)} pages)",
             report={"batch_index": target, "pages": len(batch_updates), "chunks": chunk_count},
+        )
+        log.info(
+            "batch %s/%s completed: pages=%s chunks=%s",
+            target,
+            NUM_BATCHES,
+            len(batch_updates),
+            chunk_count,
         )
     except Exception as e:
         log.exception("batch refresh failed")
