@@ -40,7 +40,7 @@ SITES = {
         "seeds": ["https://darglobal.co.uk/", "https://darglobal.co.uk/about",
                   "https://darglobal.co.uk/investor", "https://darglobal.co.uk/hospitality",
                   "https://darglobal.co.uk/projects"],
-        "max_pages": 400,          # safety ceiling, not a target
+        "max_pages": 600,          # safety ceiling, not a target
         # English only: skip other language prefixes
         "exclude": [r"^/(ar|ru|fr|de|es|zh|it|tr)(/|$)"] + _COMMON_EXCLUDE,
     },
@@ -65,11 +65,11 @@ SITES = {
 BLOG = {
     "key": "wasalt-blog",
     "api": "https://blog.wasalt.sa/en/wp-json/wp/v2/posts",
-    "max_posts": 600,              # the whole blog, with a safety ceiling
+    "max_posts": 800,              # safety ceiling for blog posts
     "per_page": 50,
 }
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", "5"))
-NUM_BATCHES = int(os.getenv("NUM_BATCHES", "5"))
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "8"))
+NUM_BATCHES = int(os.getenv("NUM_BATCHES", "8"))
 BATCH_GAP_MIN = int(os.getenv("BATCH_GAP_MIN", "60"))
 BATCH_REFRESH_INTERVAL_MIN = int(os.getenv("BATCH_REFRESH_INTERVAL_MIN", "360"))
 CHUNK_MAX_CHARS = int(os.getenv("CHUNK_MAX_CHARS", "900"))
