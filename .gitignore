@@ -1,0 +1,27 @@
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+# Virtual environments & local tooling
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets & local environment
+.env
+.env.*
+!.env.example
+
+# Runtime state & downloaded models
+runtime/
+models/
+*.tmp
+
+# Wrangler / Cloudflare cache
+.wrangler/
+cloudflare-cron/.wrangler/
+cloudflare-cron/.dev.vars
